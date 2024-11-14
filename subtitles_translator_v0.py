@@ -94,7 +94,7 @@ async def translateSubtitles(contentDescription, targetLanguage, inputSrtFilenam
     log(f'Wrote "{outputSrtFilename}"')
 
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 5:
         print(f'Usage: {0} <content description, for example: series Castle, season 1> <target language> <existing subtitles filename> <output filename>')
         sys.exit(1)
 

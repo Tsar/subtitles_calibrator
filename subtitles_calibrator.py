@@ -65,7 +65,7 @@ def readSubs(filename):
     except UnicodeDecodeError:
         return pysrt.open(filename, encoding=SUBS_FALLBACK_ENCODING)
 
-async def matchAndFixSubtitles(correctSrtFilename, badTimingsSrtFilename):
+async def matchAndFixSubtitles(correctSrtFilename, badTimingsSrtFilename, outputFilename):
     subs1 = readSubs(correctSrtFilename)
     subs2 = readSubs(badTimingsSrtFilename)
     result = copy.deepcopy(subs1)
@@ -139,13 +139,13 @@ async def matchAndFixSubtitles(correctSrtFilename, badTimingsSrtFilename):
     for i in range(len(result) - 1, -1, -1):
         if result[i].text == TO_BE_DELETED_MARKER:
             del result[i]
-    newSubsFilename = badTimingsSrtFilename[:-4] + '.autofixed.srt'
-    result.save(newSubsFilename, encoding='utf-8')
-    log(f'Wrote "{newSubsFilename}"')
+
+    result.save(outputFilename, encoding='utf-8')
+    log(f'Wrote "{outputFilename}"')
 
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
-        print(f'Usage: {0} <SRT filename with correct timings> <other language SRT filename with incorrect timings>')
+    if len(sys.argv) < 4:
+        print(f'Usage: {0} <SRT filename with correct timings> <other language SRT filename with incorrect timings> <output filename>')
         sys.exit(1)
 
-    asyncio.run(matchAndFixSubtitles(sys.argv[1], sys.argv[2]))
+    asyncio.run(matchAndFixSubtitles(sys.argv[1], sys.argv[2], sys.argv[3]))
