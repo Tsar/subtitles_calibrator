@@ -1,7 +1,8 @@
 #!/usr/bin/env python3.8
-import copy
+
 import sys
 import json
+import copy
 import asyncio
 
 import pysrt

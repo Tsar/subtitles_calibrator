@@ -1,7 +1,10 @@
 #!/usr/bin/env python3.8
-import copy
+
+import os
 import sys
 import json
+import copy
+import hashlib
 import asyncio
 
 import pysrt
@@ -59,6 +62,29 @@ CORRESPONDING_SUBTITLES_RESPONSE_FORMAT = {
 with open('openai_creds.json', 'r') as openaiCreds:
     OPENAI_API_KEY = json.load(openaiCreds)['apiKey']
 
+REQUESTS_CACHE_FILENAME = 'requests_cache.json'
+
+if os.path.isfile(REQUESTS_CACHE_FILENAME):
+    with open(REQUESTS_CACHE_FILENAME, 'r') as requestsCacheR:
+        requestsCache = json.load(requestsCacheR)
+else:
+    requestsCache = {}
+
+def calcRequestHash(request):
+    m = hashlib.sha256()
+    m.update(request.encode('utf-8'))
+    return m.hexdigest()
+
+def getResponseFromCacheOrNone(request):
+    h = calcRequestHash(request)
+    return requestsCache.get(h)
+
+def updateRequestsCache(request, response):
+    h = calcRequestHash(request)
+    requestsCache[h] = response
+    with open(REQUESTS_CACHE_FILENAME, 'w') as requestsCacheW:
+        requestsCacheW.write(json.dumps(requestsCache))
+
 def readSubs(filename):
     try:
         return pysrt.open(filename)
@@ -81,21 +107,24 @@ async def matchAndFixSubtitles(correctSrtFilename, badTimingsSrtFilename, output
             prompt += f'{i}\n{sub.text}\n\n'
         prompt = prompt.strip()
 
-        log(
-            f'Making request to GPT to match subs1 range {pos1}..{pos1 + SUBS_BATCH_SIZE_TO_MATCH} of {len(subs1)} ' +
-            f'with subs2 range {pos2}..{pos2 + SUBS_BATCH_SIZE_TO_MATCH} of {len(subs2)}'
-        )
-
-        try:
-            response = await requestChatCompletion(
-                messages=[{'role': 'user', 'content': prompt}],
-                gptModel='gpt-4o',
-                apiKey=OPENAI_API_KEY,
-                additionalParams={"response_format": CORRESPONDING_SUBTITLES_RESPONSE_FORMAT},
+        response = getResponseFromCacheOrNone(request=prompt)
+        if response is None:
+            log(
+                f'Making request to GPT to match subs1 range {pos1}..{pos1 + SUBS_BATCH_SIZE_TO_MATCH} of {len(subs1)} ' +
+                f'with subs2 range {pos2}..{pos2 + SUBS_BATCH_SIZE_TO_MATCH} of {len(subs2)}'
             )
-        except StatusNot200Exception as ex:
-            log(f'Subtitles matching failed: {ex}, {ex.detailsForLogging}')
-            break
+
+            try:
+                response = await requestChatCompletion(
+                    messages=[{'role': 'user', 'content': prompt}],
+                    gptModel='gpt-4o',
+                    apiKey=OPENAI_API_KEY,
+                    additionalParams={"response_format": CORRESPONDING_SUBTITLES_RESPONSE_FORMAT},
+                )
+            except StatusNot200Exception as ex:
+                log(f'Subtitles matching failed: {ex}, {ex.detailsForLogging}')
+                break
+            updateRequestsCache(request=prompt, response=response)
 
         corresponding = json.loads(response)['corresponding_subtitles']
         if len(corresponding) == 0:
